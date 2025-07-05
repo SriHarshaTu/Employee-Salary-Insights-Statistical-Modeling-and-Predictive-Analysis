@@ -15,8 +15,7 @@ This project investigates salary patterns in the data science field using a data
 
 ## 📊 Dataset Overview
 
-- **Source**: [Provide dataset link or name, e.g., Kaggle or CSV from course]
-- **Size**: ~N rows × M columns
+- **Source**: Kaggle
 - **Features include**:
   - `Age`
   - `Gender`
