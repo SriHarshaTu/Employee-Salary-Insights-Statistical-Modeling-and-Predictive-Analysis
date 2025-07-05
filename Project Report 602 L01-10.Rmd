@@ -1,0 +1,487 @@
+---
+title: "Employee Salary Insights: Statistical Modeling and Predictive Analysis"
+author: "Rahul Gandhi, Juan Byju, Ayush Senthil Nelli, Ojas Sharma, Sri Harsha Tuttaganti"
+date: "October 15, 2024"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
+    fig_caption: true
+bibliography: references.bib
+---
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Introduction
+
+As data science students, understanding the job market and potential future salaries is a topic of significant interest. To gain a deeper insight into what we might expect in terms of salary, we have chosen to analyze a dataset that includes various influential factors such as age, gender, education, job title, years of experience, and salary itself.
+
+This dataset is particularly relevant to our cohort as it provides valuable information about the current landscape of earnings within the data science field and related professions. By delving into these data, we aim to uncover trends in salary distribution and identify the key factors that influence earning potential across different demographic groups.
+
+Our approach involves the use of multiple statistical techniques:
+
+* Exploratory Data Analysis (EDA) was employed to identify patterns and trends within the data.
+* Confidence intervals were calculated to measure the variability and reliability of our salary estimates.
+* Hypothesis testing allowed us to determine which factors have a statistically significant impact on salary differences.
+* Finally, we applied regression models to predict salary based on years of experience.
+	
+The objective of this analysis is to provide valuable insights into salary expectations for our future roles in data science, equipping us with knowledge that can inform career decisions and negotiations in the job market.
+
+\newpage
+
+# EDA
+***Load necessary libraries***
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(mosaic)
+library(dplyr)
+
+
+# Load the dataset
+salary_df <- read.csv("Salary_Data_Cleaned.csv")
+
+# Take a quick look at the data
+head(salary_df)
+
+summary(salary_df)
+
+```
+
+## Salary v/s Education Level:
+
+```{r}
+# Calculate average salary by Education Level
+education_salary <- aggregate(Salary ~ Education.Level, data = salary_df
+                              , FUN = base::mean)
+
+# Set the desired order for Education Level
+education_salary$Education.Level <- factor(education_salary$Education.Level, 
+                                           levels = c("High School", "Bachelor's",
+                                                      "Master's", "PhD"))
+
+# Create the bar chart
+ggplot(education_salary, aes(x = Education.Level, y = Salary)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Salary v/s Education Level", x = "Education Level", 
+       y = "Average Salary") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 14)) +  # Center and size title
+  scale_y_continuous(limits = c(0, 200000), breaks = 
+                       seq(0, 200000 , by=25000) ,labels=scales::comma)  # Set y-axis
+
+
+
+```
+
+This bar chart highlights the impact of education on salaries. As education levels rise from high school to a PhD, so do earnings. While obtaining a bachelor's degree can land you a six-figure salary, a PhD has the potential to push your earnings to nearly \$170,000. It’s clear that higher education is strongly linked to higher salary potential.
+
+## Salary v/s Experience
+
+```{r}
+
+# Initialize an empty data frame for grouped results
+grouped_data <- data.frame(Experience_Group = character(), Average_Salary = numeric())
+
+# Loop through the years of experience in steps of 3
+for (i in seq(0, max(salary_df$Years.of.Experience, na.rm = TRUE), by = 3)) {
+  # Define the group label
+  group_label <- paste(i, i + 2, sep = "-")
+  
+  # Calculate the average salary for the current group
+  avg_salary <- mean(salary_df$Salary[salary_df$Years.of.Experience 
+                                      >= i &salary_df$Years.of.Experience < i + 3],
+                     na.rm = TRUE)
+  
+  # Add the group label and average salary to the results data frame
+  grouped_data <- rbind(grouped_data, data.frame(Experience_Group = group_label,
+                                                 Average_Salary = avg_salary))
+}
+
+# Convert Experience_Group to an ordered factor
+grouped_data$Experience_Group <- factor(grouped_data$Experience_Group, 
+                                        levels = 
+                                          paste(seq(0,max(salary_df$Years.of.Experience, 
+                                                          na.rm = TRUE), by = 3), 
+                                                       seq(2, 
+                                                      max(salary_df$Years.of.Experience,
+                                                          na.rm = TRUE) + 2, by = 3),
+                                                sep = "-"), 
+                                        ordered = TRUE)
+
+
+# Create a bar graph for Average Salary by 3-Year Experience Groups
+ggplot(grouped_data, aes(x = Experience_Group, y = Average_Salary)) +
+  geom_bar(stat = "identity", fill = "skyblue", width = 0.7) +  # Adjust bar width
+  labs(title = "Salary v/s Experience",
+       x = "Years of Experience (Grouped in 3-Year Intervals)",
+       y = "Average Salary") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),   # Rotate x-axis labels
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 14)) +  # Center and size the title
+  scale_y_continuous(limits = c(0, 200000), breaks = 
+                       seq(0, 200000, by = 25000), labels = 
+                       scales::comma)  # Set y-axis limits and breaks
+```
+
+This chart underscores how experience plays a vital role in salary progression. Earnings climb steadily with years of experience, peaking around the 15 to 17-year mark. The sharpest increases are seen in the early career stages, with salaries growing rapidly up to 11 years of experience. Afterward, growth levels off, with salaries stabilizing between \$150,000 and \$200,000, showing that early career growth is essential, but plateaus after significant experience is gained.
+
+
+## Salary Distribution across Top 5 Jobs:
+
+```{r}
+
+
+# Calculate average salary by Job Title
+job_salary <- aggregate(Salary ~ Job.Title, data = salary_df, FUN = base::mean, 
+                        na.rm = TRUE)
+
+# Sort the data in descending order based on Average Salary
+job_salary <- job_salary[order(-job_salary$Salary), ]
+
+# Get the top 5 jobs by average salary
+top_jobs <- head(job_salary$Job.Title, 5)
+
+# Filter the original dataset to include only top 5 jobs
+top_jobs_data <- salary_df[salary_df$Job.Title %in% top_jobs, ]
+
+# Create the box plot for salaries by Job Title
+ggplot(top_jobs_data, aes(x = Job.Title, y = Salary)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(title = "Salary Distribution across Top 5 Jobs", x = "Job Title", y = "Salary") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+The box plot reveals the salary range for top job roles, such as Data Scientist, Director of Data Science, and Software Engineer Manager. Although there is some variability, these positions are well-compensated. The Director of Data Science has the highest median salary, followed by the Marketing Director. Data Scientist salaries show more variation compared to other roles, and the Senior Project Engineer displays a few significant outliers below the lower quartile. Overall, director-level roles offer higher, more stable salaries compared to engineering-related positions.
+
+In conclusion, examination of the three graphs reveals that advanced education corresponds with notably higher salaries, with PhD holders earning the most. Experience is also key in salary progression, with earnings increasing sharply up to the 15-17 year mark before leveling off. Among the top job roles, director positions provide the highest and most stable incomes, whereas technical roles such as Data Scientist display greater variation in salary.
+
+\newpage
+
+# Research Questions
+
+This study focuses on understanding salary discrepancies through the lens of two primary research questions. To address these, we will conduct hypothesis testing to explore the following:
+
+1) Gender-Based Salary Gap: We aim to investigate whether there is a significant difference in salaries between males and females in the dataset. This analysis will help us understand if gender plays a role in determining salary levels within the organization or industry being studied. Specifically, we will test the null hypothesis that there is no salary difference between genders.
+
+2) Salary Gap Between Data Scientists and Data Analysts: The second focus of this research is to examine salary disparities between two job titles: Data Scientists and Data Analysts. By comparing these roles, we aim to determine if one profession is compensated significantly higher than the other, controlling for other variables. The null hypothesis for this test is that there is no difference in the average salary between Data Scientists and Data Analysts.
+
+Both analyses are critical in addressing broader questions about pay equity and compensation structures within the organization. By examining both gender and job role disparities, we aim to provide a more comprehensive understanding of salary distribution patterns and potential inequalities.
+
+
+## Gender-Based Salary Gap
+
+Null Hypothesis $H_{0}$: There is no significant difference in mean salaries between male and female. $\mu_{MALE} = \mu_{FEMALE}$
+
+Alternative Hypothesis $H_{1}$: There is a significant difference in mean salaries between male and female. $\mu_{MALE} \ne \mu_{FEMALE}$
+
+```{r}
+
+# Step 2: Filter the dataset to include only 'Male' and 'Female'
+filtered_data = salary_df %>% filter(Gender %in% c("Male", "Female"))
+
+# Step 3: Calculate the mean salary for each gender with confidence intervals (CIs)
+mean_salaries_ci = filtered_data %>%
+  group_by(Gender) %>%
+  summarise(
+    mean_salary = mean(Salary),
+    se = sd(Salary) / sqrt(n()),  # Standard Error
+    lower_ci = mean_salary - qt(0.975, df=n()-1) * se,  # Lower bound of 95% CI
+    upper_ci = mean_salary + qt(0.975, df=n()-1) * se   # Upper bound of 95% CI
+  )
+
+# Step 4: Perform Welch's t-test (unequal variances)
+t_test_result = t.test(Salary ~ Gender, data = filtered_data, var.equal = FALSE)
+cat("t-Test p-value:", t_test_result$p.value, "\n")
+
+```
+
+Since the p-value is much smaller than 0.05, it suggests that the difference between the mean salaries of "Male" and "Female" is statistically significant, meaning we reject the null hypothesis $H_{0}$.There is strong evidence that the mean salaries are different 
+between genders.**
+
+95% Confidence Interval:The confidence interval for the difference in means is [-16034.78, -10679.36].
+
+This means we are 95% confident that the difference in mean salaries between females and males is between \$10,679.36 and \$16,034.78.
+
+
+## Salary Gap Between Data Scientists and Data Analysts
+
+Null Hypothesis $H_{0}$: Mean Salary of Data Scientist is equal to Mean Salary of Data Analyst. $\mu_{DS} = \mu_{DA}$
+
+
+Alternate Hypothesis $H_{A}$: Mean Salary of Data Scientist is not equal to Mean Salary of Data Analyst. $\mu_{DS} \ne \mu_{DA}$
+
+
+```{r}
+
+# Filter the data for 'Data Analyst' and 'Data Scientist'
+data_analyst = filter(salary_df, Job.Title == "Data Analyst")
+data_scientist = filter(salary_df, Job.Title == "Data Scientist")
+
+# Remove NA values from the datasets
+data_analyst = na.omit(data_analyst)
+data_scientist = na.omit(data_scientist)
+
+# Set seed for reproducibility
+set.seed(1)
+
+# Resampling and calculating mean differences
+B <- do(10000) * (mean(resample(data_scientist$Salary)) - mean(resample(data_analyst$Salary)))
+
+
+# Convert the result into a data frame for ggplot
+B_df = data.frame(mean_diff = B$result)
+
+# Calculate confidence intervals
+UL = quantile(B_df$mean_diff, 0.975)
+LL = quantile(B_df$mean_diff, 0.025)
+
+# Compute observed mean difference
+obs_diff <- mean(data_scientist$Salary) - mean(data_analyst$Salary)
+
+
+
+# Visualizing the distribution of mean differences
+ggplot(B_df, aes(x = mean_diff)) + 
+  geom_histogram(col = 'black', fill = 'blue', binwidth = 1000, na.rm = TRUE) + 
+  xlab("Sample Mean Difference") + 
+  ylab("Frequency") + 
+  ggtitle("Mean Difference for Salaries between Data Scientist and Data Analyst")+
+  geom_vline(xintercept = UL, color = "red") +
+geom_vline(xintercept = LL, color = "red")
+
+
+cat("95% confidence interval the salary difference between Data Scientists and Data
+    Analysts using Boostrap Method", "(", LL, ",", UL, ")")
+
+
+```
+
+
+The distribution is approximately symmetric, with a peak around 40,000. This indicates that, in most resampled cases, data scientists tend to earn about 40,000 more than data analysts.
+
+95% Confidence interval for the salary difference between Data Scientists and Data Analysts is [36880 , 45140.17] which does not contain 0, it suggests that there is a statistically significant salary difference between these two roles.
+
+Since the null hypothesis states that the mean salaries of data scientists and data analysts are equal, and we observe most differences are around 40,000 (away from zero), this suggests evidence against the null hypothesis.
+
+Therefore, we reject the null hypothesis.
+
+\newpage
+
+# Regression Analysis
+
+## Data Visualization
+
+***Let's visualize scater plot for Year of Experience against Salary***
+```{r}
+
+# Visualize the data using a scatter plot
+ggplot(salary_df, aes(x = Years.of.Experience, y = Salary)) +
+  geom_point(color = "blue") +
+  ggtitle("Scatter Plot of Years of Experience vs Salary") +
+  xlab("Years of Experience") +
+  ylab("Salary")
+
+```
+
+In the above scattered plot, each point depicts data point, corresponding to employee's salary. This scatter plot helps to understand overall distribution of employee's salary against various years of experience.
+
+Observing the graph can give us a preliminary understanding of how these two variables might be related.
+
+A positive trend between the Years of Experience and Employee's Salary can be observed in this scatted plot. This indicates that typically, employee with more years of experience earn higher salaries, which implies that employee's salary is somewhat dependent on the Years of Experience.
+
+There is a tighter clustering of data in positive trends indicates a stronger relationship.
+
+In the scatter plot, some points are visually distinct from rest of plots which can be observed tightly grouped together which indicates outliers. For instance, there are individuals with relatively few years of experience (e.g., below 5) but very high salaries, and vice versa—some with many years of experience (e.g., above 20) but relatively low salaries.
+
+
+## Correlation Between Variables: Years of Experience and Salary
+
+To find the direction and strength of the linear relationship between two years of experience and salary, the Pearson Correlation Coefficient will be utilized. It has a value in the interval -1 to +1. Knowing this correlation enables us to measure the strength of the correlation between Years of Experience and Salary and determine if it is a reliable predictor of Salary.
+
+***Calculate correlation between Years of Experience and Salary***
+```{r}
+
+# Calculate correlation between Years of Experience and Salary
+correlation <- cor(salary_df$Years.of.Experience, salary_df$Salary)
+cat("Correlation between Years of Experience and Salary:", correlation)
+
+```
+
+
+For given data, Pearson Correlation Coefficient is *0.801*.
+
+Interpretation:
+
+Strength: A correlation of 0.801 indicates a strong positive relationship between years of experience and salary which implies that individuals with more years of experience generally tend to earn higher pay.
+
+Direction: A correlation of 0.801 which is greater than 0 indicates that the relationship between the two variables moves in the same direction. As Years of Experience increases, Salary also increases.
+
+However, correlation alone does not mean causation. While more experience tends to result in higher salaries, other factors such as education level, industry ,and job role could also pay role in determining salary.
+
+
+```{r}
+# Fit the linear regression model
+lr_model <- lm(Salary ~ Years.of.Experience, data = salary_df)
+
+# Print the summary of the model
+summary_model = summary(lr_model)
+summary_model
+
+```
+
+For linear regression model,  
+
+$\beta_{0}$ represent the estimated Y intercept of the regression line where it is the value of X is zero. For given problem, $\beta_{0} = 63401.65$ which represents the expected salary \$63401.65 when person has no experience. 
+
+
+$\beta_{1}$ amount of change in the Salary for a one-unit increase in the Years of Experience. For given model, $\beta_{1} = 6851.50$ which means for every additional year of experience, the salary is expected to increase by \$6851.50 on average.
+
+Estimated Linear Model:
+
+$Salary = 63401.65 + 6851.50 * Years.of.Experience$
+
+```{r}
+# Visualize the data using a scatter plot with Regression Model
+ggplot(salary_df, aes(x = Years.of.Experience, y = Salary)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  ggtitle("Scatter Plot of Years of Experience vs Salary") +
+  xlab("Years of Experience") +
+  ylab("Salary")
+
+```
+
+
+
+## Model Evaluation
+
+Model evaluation is important for the model's accuracy and reliability since the coefficients are estimated based on the data.
+
+### Linear Relationship between Independent Variable and Dependent Variable:
+We already have verified whether we have linear relation ship between our independent variable (Year of Experience) and dependent variable salary with scatter plot visualization and Pearson Correlation Coefficient.
+
+
+### Coefficient Estimates Significant:
+
+When looking at linear regression, it's crucial to check if the calculated coefficients matter. In other words, we need to see if the predictor variable i.e. Years of Experience has a real effect on the dependent variable i.e. Salary. We use hypothesis testing to figure this out.
+
+
+Null Hypothesis $H_{0}$: There is no relationship between Years of Experience and Salary.
+
+$\beta_{1} = 0$
+
+Alternate Hypothesis $H_{a}$: There is a significant relationship between Years of Experience and Salary.
+
+$\beta_{1} \ne 0$
+
+
+```{r}
+
+
+# Extract the p-value for the slope (beta_1)
+p_value_beta1 = summary_model$coefficients[2, "Pr(>|t|)"]
+
+cat("p-value for beta1: ", p_value_beta1, "\n")
+
+```
+
+
+Interpretation of Results:
+    
+p-value: 
+The p-value tells you the probability of observing such a t-value given the null hypothesis that $\beta_{1} = 0$. The p-value is 2e-16 $\approx$ 0 which is less than significance level $\alpha = 0.05$. Hence we reject the null hypothesis and indicate that Years of Experience has a significant effect on Salary.
+
+This leads to the conclusion that Years of Experience has a statistically significant positive effect on Salary. Specifically, for every additional year of experience, Salary increases by approximately $6,851.50.
+
+### Assumption of Residual[@statisticssolutions][@ma_utexas_model_checking]
+
+I) Independence of the Residuals:
+
+The residuals $e_i = y_i - \hat{y}_i$ i.e. the differences between observed and predicted values must be independent of one another. This means that the value of the residual for one observation should not influence the residual for any other observation. This is crucial assumptions to make sure the regression model's coefficients are unbiased and efficient. 
+
+For non-time-series data, independence is typically assumed if the data collection process is random.[^2] Since our data does not include a time series column, we can assume that the residuals are independent.
+
+II) Normality of the Residuals:
+
+Residuals should be approximately normally distributed. This assumption is especially important for the validity of hypothesis tests using t-tests on the regression coefficients and for the construction of confidence intervals. 
+
+This assumption can be verified by examining histograms or Q-Q plots of the residuals. As shown below:
+
+```{r}
+plot(lr_model, which = 2 ,col = "red")
+```
+
+Based on the Q-Q plot for our dataset, we can observe that the points closely follow the reference line. This indicates that the residuals are approximately normally distributed
+
+
+III) Equality of the Variance of the Residuals:
+The variance of residuals should be consistent across all levels of the independent variables. This assumption is also known as the assumption of homoscedasticity. A scatterplot of residuals versus predicted values should not display any noticeable pattern. The residuals should be randomly scattered around zero with no clear pattern.
+
+
+This assumption can be verified by examining histograms or Q-Q plots of the residuals. As shown below:
+
+```{r}
+
+plot(lr_model, which = 1, col = "blue", pch = 16)
+# Add a horizontal line at y = 0
+abline(h = 0, col = "purple", lty = 2)
+
+```
+
+For given data, 
+
+The spread of residuals seems to decrease as the fitted values increase, showing a funnel-like shape. This suggests that the residuals may not have constant variance across the range of fitted values, indicating *heteroscedasticity* i.e. the variance of errors is not constant.
+
+Trend: The red line shows a negative slope, which suggests that the model's errors might systematically vary as a function of the fitted values, further reinforcing the likelihood of heteroscedasticity.
+
+Given this, the graph does not support the assumption of homoscedasticity, as there appears to be a clear trend of decreasing variance in the residuals with increasing fitted values.
+
+
+### Coefficient of Determination (R-squared)[@minitab_r_squared]
+Understanding how good fit a linear regression model performs often depends on the Coefficient of Determination, known more commonly as R-squared $(R^{2})$. This value gives us an idea of the extent to which the independent variables account for the variation seen in the dependent variable.
+
+```{r}
+
+# Extract R-squared value
+r_squared = summary_model$r.squared
+cat("R-squared:", r_squared, "\n")
+
+```
+
+
+In this specific model, which seeks to estimate Salary based on the Years of Experience, the R-squared is 0.6426 This tells us that approximately 64.26% of salary variability is captured by the model.
+
+Such an R-squared score suggests there is a notable association between the Years of Experience and the Salary. As individuals gain experience, their salary tends to increase, and this relationship explains close to 65% of the salary differences observed.
+
+On the flip side, 35.74% of the variation in salary can not be explained by the model, due to factors outside the scope of this model. Some of the factors like education, job role, industry, geographic location, or individual skills.
+
+\newpage
+
+# Conclusion
+
+The regression model, which estimates Salary as a function of Years of Experience, fits the data quite well.
+
+The findings demonstrate a strong positive relationship between experience and pay, indicating that while wages generally rise with experience, this pace of growth eventually declines. This is in line with the typical pattern in professional contexts, which is that significant salary increases are correlated with early experience and thereafter slow down.
+
+The model’s fit is confirmed by a strong R-squared value, indicating that much of the salary variation is accounted for by years of experience. Additionally, diagnostic checks demonstrate that the residuals are roughly normally distributed and exhibit homoscedasticity.
+
+From a practical use case, this model can serve both organizations and individuals.
+Employers might use it to create salary structures that accurately reflect experience, while employees could use it to set informed salary expectations. In conclusion, this model not only enhance our understanding of salary trends but also offers useful insights for decision-making in HR and career planning.
+
+As the next step, we are looking to enhance the model by addressing the funneling pattern seen in the residuals versus fitted plot. To achieve this, we intend to introduce multiple linear regression, factoring in variables such as Education Level and Job Title in addition to Years of Experience. By doing so, we aim to capture more of the factors that contribute to Salary variation, improving the model’s accuracy and offering deeper insights into the drivers behind salary differences.
+
+\newpage
+
+# References
+
